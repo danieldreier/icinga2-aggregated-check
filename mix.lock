@@ -1,2 +1,4 @@
-%{"mix-erlang-tasks": {:git, "git://github.com/alco/mix-erlang-tasks.git", "3d6b27da522206ca807bfded5f45d023b234350a", []},
+%{"getopt": {:hex, :getopt, "0.8.2"},
+  "jiffy": {:hex, :jiffy, "0.14.7"},
+  "jsx": {:hex, :jsx, "2.8.0"},
   "mix_erlang_tasks": {:hex, :mix_erlang_tasks, "0.1.0"}}
