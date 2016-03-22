@@ -3,5 +3,6 @@
 /ctest/logs
 erl_crash.dump
 *.ez
-
+*.beam
 /doc
+aggcheck

@@ -39,32 +39,26 @@ query_icinga(Options) ->
   Host = aggcheck_cli:setting(host, Options),
   Port = aggcheck_cli:setting(port, Options),
   Url = "https://" ++ Host ++ ":" ++ integer_to_list(Port) ++ "/v1/objects/services",
-  io:format("\n\nservice_filter: ~p\n\n", [list_to_binary(ServiceFilter)]),
+  %io:format("\n\nservice_filter: ~p\n\n", [list_to_binary(ServiceFilter)]),
   PostBody = jsx:encode([{<<"type">>,<<"Host">>},{<<"filter">>,list_to_binary(ServiceFilter)}]),
-  io:format("\n\nPostBody: ~p\n\n", [PostBody]),
+  %io:format("\n\nPostBody: ~p\n\n", [PostBody]),
   PostContentType = "application/json",
   Response = httpc:request(post, {Url, [auth_header({username,Username,password,Password}),
                                         {"X-HTTP-Method-Override","GET"}], PostContentType, PostBody},
                                       [{ssl, [{verify, verify_none}]}], []),
   case Response of
 %    {error, {failed_connect, _}} -> Body = undef, Headers = undef, nagios:unknown("SSL error");
-    {ok, {{Version, 200, ReasonPhrase}, Headers, Body}} -> io:format("something worked, got headers ~p\n\n", [Headers]);
-    {ok, {{"HTTP/1.1",404,"Not Found"}, _      , _   }} -> Body = [], Headers = [], io:format("404, no results found")
+    {ok, {{Version, 200, ReasonPhrase}, Headers, Body}} -> ok;
+    {ok, {{"HTTP/1.1",404,"Not Found"}, _      , _   }} -> Body = [], Headers = [] %, io:format("404, no results found")
     end,
   %io:format("response headers: ~p\n\n", [Headers]),
   %io:format("body: ~p\n\n", [binary:list_to_bin(Body)]),
   [{<<"results">>,ExtractedResults}] = jsx:decode(binary:list_to_bin(Body)),
-  ExtractedResults.
+  lists:map( fun(X) -> {<<"attrs">>, Record} = lists:nth(1, X), Record end, ExtractedResults).
 
-munge_icinga_results(IcingaResponse) ->
-  % convert the icinga results into a format that's easier for us to work with
-  % specifically, let's make it just a list of lists and remove the {<<"attrs">> bit
-  lists:map( fun(X) -> {<<"attrs">>, Record} = lists:nth(1, X), Record end, IcingaResponse).
-
-% filter Icinga API response (after flattening by munge_icinga_results)
-% returns a list in the same format, but only containing results for checks
-% in the state indicated by the State parameter. State param must be a float
-% (1.0, 2.0) because of how the API response is decoded.
+% filter Icinga API response returns a list in the same format, but only
+% containing results for checks in the state indicated by the State parameter.
+% State param must be a float (1.0, 2.0) because of how the API response is decoded.
 filter_results_by_state(ResultList, State) ->
   lists:filter(fun (X) ->
     case lists:keyfind(<<"last_hard_state">>, 1, X) of
@@ -117,5 +111,47 @@ count_checks(ResultList) ->
   % count total number of active checks
   TotalCount = length(ActiveChecks),
 
-  {ok, {total, TotalCount}, {ok, OkCount}, {warning, WarnCount}, {critical, CritCount}, {unknown, UnknownCount}}.
+  [{total, TotalCount}, {ok, OkCount}, {warning, WarnCount}, {critical, CritCount}, {unknown, UnknownCount}].
 
+% given a set of check counts, and a check to look for, determine whether we're above/below that threshold
+check_threshold(Counts, TargetState, Threshold, OrderMode) ->
+  case {lists:keyfind(TargetState, 1, Counts),OrderMode} of
+    {{_State, Count}, OrderMode} when Count >= Threshold andalso OrderMode == "max" -> true;
+    {{_State, Count}, OrderMode} when Count <  Threshold andalso OrderMode == "max" -> false;
+    {{_State, Count}, OrderMode} when Count >= Threshold andalso OrderMode == "min" -> false;
+    {{_State, Count}, OrderMode} when Count <  Threshold andalso OrderMode == "min" -> true
+  end.
+
+
+alert_message(Counts, TargetState, WarnThreshold, CritThreshold, ThresholdType, OrderMode) ->
+%  def alert_message(check_count, threshold)
+%    word = threshold_order == :max ? 'greater than' : 'less than'
+%    "detected #{check_count} checks in \"#{exit_code_to_string(config[:state])}\" state, which is #{word} #{threshold_order.to_s} threshold of #{threshold}"
+%  end
+  ThresholdViolated = case ThresholdType of
+    critical -> CritThreshold;
+    warning  -> WarnThreshold;
+    ok       -> WarnThreshold
+  end,
+  OrderWord = case {OrderMode,ThresholdType} of
+    {"min",ok} -> "is greater than warning(" ++ integer_to_list(WarnThreshold) ++ ") and critical(" ++ integer_to_list(CritThreshold) ++ ") thresholds";
+    {"max",ok} -> "is less than warning(" ++ integer_to_list(WarnThreshold) ++ ") and critical(" ++ integer_to_list(CritThreshold) ++ ") thresholds";
+    {"min",_} ->  "is less than or equal to" ++ " " ++ OrderMode ++ " " ++ atom_to_list(ThresholdType) ++ " threshold of " ++ integer_to_list(ThresholdViolated);
+    {"max",_} ->  "is greater than or equal to" ++ " " ++ OrderMode ++ " " ++ atom_to_list(ThresholdType) ++ " threshold of " ++ integer_to_list(ThresholdViolated)
+  end,
+  {TargetState, CheckCount} = lists:keyfind(TargetState, 1, Counts),
+  {total, TotalCount} = lists:keyfind(total, 1, Counts),
+  integer_to_list(CheckCount) ++ " checks in " ++ atom_to_list(TargetState) ++ " state out of " ++ integer_to_list(TotalCount) ++" total results, which " ++ OrderWord.
+
+
+% determine what check state this check should return, given the check counts,
+% thresholds, and ordering mode
+overall_state(Counts, TargetState, WarnThreshold, CritThreshold, OrderMode) ->
+  % test if we're above/below the warn threshold
+  Warn = check_threshold(Counts, TargetState, WarnThreshold, OrderMode),
+  Crit = check_threshold(Counts, TargetState, CritThreshold, OrderMode),
+  case {Warn, Crit} of
+    {_,     true } -> critical;
+    {true,  _    } -> warning;
+    {false, false} -> ok
+  end.

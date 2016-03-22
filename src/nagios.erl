@@ -8,19 +8,14 @@
 -define(UNKNOWN, 3).
 
 % just keeping this logic around becuase we'll probably need it later in writing the check
-string2code(String) ->
+halt_with(Status) ->
   % the desired check state must be converted from strings to numeric values
-  case string:to_lower(String) of
-    "ok"       -> Val = ?OK;
-    "0"        -> Val = ?OK;
-    "warning"  -> Val = ?WARNING;
-    "1"        -> Val = ?WARNING;
-    "critical" -> Val = ?CRITICAL;
-    "2"        -> Val = ?CRITICAL;
-    "unknown"  -> Val = ?UNKNOWN;
-    "3"        -> Val = ?UNKNOWN
-  end,
-  Val.
+  case Status of
+    ok       -> halt(?OK);
+    warning  -> halt(?WARNING);
+    critical -> halt(?CRITICAL);
+    unknown  -> halt(?UNKNOWN)
+  end.
 
 new(Name) when is_list(Name) ->
   #{name => Name,
@@ -75,4 +70,4 @@ render(#{perfdata := [{MetricName,MetricValue}|RemainingMetrics], text_output :=
 
 %render(#{perfdata := [{MetricName,MetricValue}|RemainingMetrics], text_output := [] } = CheckData, Output) when is_list(Output) ->
 render(#{perfdata := [], text_output := []}, Output) ->
-  string:join(Output, "\n") ++ "\n".
+  string:join(Output, "\n").
