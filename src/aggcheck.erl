@@ -46,15 +46,17 @@ query_icinga(Options) ->
   Response = httpc:request(post, {Url, [auth_header({username,Username,password,Password}),
                                         {"X-HTTP-Method-Override","GET"}], PostContentType, PostBody},
                                       [{ssl, [{verify, verify_none}]}], []),
-  case Response of
-%    {error, {failed_connect, _}} -> Body = undef, Headers = undef, nagios:unknown("SSL error");
-    {ok, {{Version, 200, ReasonPhrase}, Headers, Body}} -> ok;
-    {ok, {{"HTTP/1.1",404,"Not Found"}, _      , _   }} -> Body = [], Headers = [] %, io:format("404, no results found")
+  Result = case Response of
+    {ok, {{Version, 200, ReasonPhrase}, Headers, Body}}   -> ok;
+    {ok, {{"HTTP/1.1",404,"Not Found"}, _      , _   }}   -> Body = [], Headers = [], ok; %, io:format("404, no results found")
+    {error, Reason}                                       -> Body = [], {error, Reason}
     end,
-  %io:format("response headers: ~p\n\n", [Headers]),
-  %io:format("body: ~p\n\n", [binary:list_to_bin(Body)]),
   [{<<"results">>,ExtractedResults}] = jsx:decode(binary:list_to_bin(Body)),
-  lists:map( fun(X) -> {<<"attrs">>, Record} = lists:nth(1, X), Record end, ExtractedResults).
+  case Result of
+    ok         -> {ok, lists:map( fun(X) -> {<<"attrs">>, Record} = lists:nth(1, X), Record end, ExtractedResults)};
+    {error, Why} -> {error, Why}
+  end.
+
 
 % filter Icinga API response returns a list in the same format, but only
 % containing results for checks in the state indicated by the State parameter.
@@ -96,21 +98,16 @@ count_checks(ResultList) ->
   % we only care about active (not disabled) checks, so filter for those first
   % after this, we only look at ActiveChecks not the full ResultList
   ActiveChecks = filter_active_results(ResultList),
-
   % find results in "OK" state
   OkCount = count_results_by_state(ResultList, ?OK),
-
   % find results in "warning" state
   WarnCount = count_results_by_state(ResultList, ?WARNING),
-
   % find results in "critical" state
   CritCount = count_results_by_state(ResultList, ?CRITICAL),
-
   % find results in "unknown" state
   UnknownCount = count_results_by_state(ResultList, ?UNKNOWN),
   % count total number of active checks
   TotalCount = length(ActiveChecks),
-
   [{total, TotalCount}, {ok, OkCount}, {warning, WarnCount}, {critical, CritCount}, {unknown, UnknownCount}].
 
 % given a set of check counts, and a check to look for, determine whether we're above/below that threshold
@@ -124,10 +121,6 @@ check_threshold(Counts, TargetState, Threshold, OrderMode) ->
 
 
 alert_message(Counts, TargetState, WarnThreshold, CritThreshold, ThresholdType, OrderMode) ->
-%  def alert_message(check_count, threshold)
-%    word = threshold_order == :max ? 'greater than' : 'less than'
-%    "detected #{check_count} checks in \"#{exit_code_to_string(config[:state])}\" state, which is #{word} #{threshold_order.to_s} threshold of #{threshold}"
-%  end
   ThresholdViolated = case ThresholdType of
     critical -> CritThreshold;
     warning  -> WarnThreshold;
@@ -141,13 +134,12 @@ alert_message(Counts, TargetState, WarnThreshold, CritThreshold, ThresholdType, 
   end,
   {TargetState, CheckCount} = lists:keyfind(TargetState, 1, Counts),
   {total, TotalCount} = lists:keyfind(total, 1, Counts),
-  integer_to_list(CheckCount) ++ " checks in " ++ atom_to_list(TargetState) ++ " state out of " ++ integer_to_list(TotalCount) ++" total results, which " ++ OrderWord.
+  integer_to_list(CheckCount) ++ "/" ++ integer_to_list(TotalCount) ++ " checks in " ++ atom_to_list(TargetState) ++ " state, which " ++ OrderWord.
 
 
 % determine what check state this check should return, given the check counts,
 % thresholds, and ordering mode
 overall_state(Counts, TargetState, WarnThreshold, CritThreshold, OrderMode) ->
-  % test if we're above/below the warn threshold
   Warn = check_threshold(Counts, TargetState, WarnThreshold, OrderMode),
   Crit = check_threshold(Counts, TargetState, CritThreshold, OrderMode),
   case {Warn, Crit} of

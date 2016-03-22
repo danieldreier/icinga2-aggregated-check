@@ -1,20 +1,23 @@
 -module(nagios).
-%-export([ok/0, ok/1, warning/0, warning/1, critical/0, critical/1, unknown/0, unknown/1]).
--compile([export_all]).
+-export([new/1, add_perfdata/3, add_output/2,set_state/2, render/1]).
+-export([halt_with/1, code_to_status/1]).
+%-compile([export_all]).
 
--define(OK, 0).
--define(WARNING, 1).
--define(CRITICAL, 2).
--define(UNKNOWN, 3).
-
-% just keeping this logic around becuase we'll probably need it later in writing the check
 halt_with(Status) ->
   % the desired check state must be converted from strings to numeric values
   case Status of
-    ok       -> halt(?OK);
-    warning  -> halt(?WARNING);
-    critical -> halt(?CRITICAL);
-    unknown  -> halt(?UNKNOWN)
+    ok       -> halt(0);
+    warning  -> halt(1);
+    critical -> halt(2);
+    unknown  -> halt(3)
+  end.
+
+code_to_status(Int) ->
+  case Int of
+    0 -> ok;
+    1 -> warning;
+    2 -> critical;
+    3 -> unknown
   end.
 
 new(Name) when is_list(Name) ->
@@ -32,9 +35,6 @@ add_output(Output, CheckData) when is_list(Output) and is_map(CheckData) ->
 
 set_state(State, CheckData) when is_map(CheckData) and is_atom(State) ->
   CheckData#{check_state := State}.
-
-%% known problems with this output constructor:
-%% - how to append the initial metric
 
 % we will iteratively construct the output in nagios format
 % first we start by rendering the first line of output, and tail calling render(CheckData, Output)
@@ -71,3 +71,4 @@ render(#{perfdata := [{MetricName,MetricValue}|RemainingMetrics], text_output :=
 %render(#{perfdata := [{MetricName,MetricValue}|RemainingMetrics], text_output := [] } = CheckData, Output) when is_list(Output) ->
 render(#{perfdata := [], text_output := []}, Output) ->
   string:join(Output, "\n").
+
