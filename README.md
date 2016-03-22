@@ -50,6 +50,12 @@ mix deps.get
 mix escript.build
 ```
 
+To build a debian package, a Makefile is provided that uses FPM:
+```shell
+gem install fpm
+Make
+```
+
 
 Contributing
 ------------
