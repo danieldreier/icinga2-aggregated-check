@@ -3,7 +3,7 @@ defmodule Aggcheck.Mixfile do
 
   def project do
     [app: :aggcheck,
-     version: "0.0.1",
+     version: "0.0.2",
      language: :erlang,
      escript: escript,
      deps: deps]

@@ -113,8 +113,8 @@ count_checks(ResultList) ->
 % given a set of check counts, and a check to look for, determine whether we're above/below that threshold
 check_threshold(Counts, TargetState, Threshold, OrderMode) ->
   case {lists:keyfind(TargetState, 1, Counts),OrderMode} of
-    {{_State, Count}, OrderMode} when Count >= Threshold andalso OrderMode == "max" -> true;
-    {{_State, Count}, OrderMode} when Count <  Threshold andalso OrderMode == "max" -> false;
+    {{_State, Count}, OrderMode} when Count >  Threshold andalso OrderMode == "max" -> true;
+    {{_State, Count}, OrderMode} when Count <= Threshold andalso OrderMode == "max" -> false;
     {{_State, Count}, OrderMode} when Count >= Threshold andalso OrderMode == "min" -> false;
     {{_State, Count}, OrderMode} when Count <  Threshold andalso OrderMode == "min" -> true
   end.
@@ -127,10 +127,10 @@ alert_message(Counts, TargetState, WarnThreshold, CritThreshold, ThresholdType, 
     ok       -> WarnThreshold
   end,
   OrderWord = case {OrderMode,ThresholdType} of
-    {"min",ok} -> "is greater than warning(" ++ integer_to_list(WarnThreshold) ++ ") and critical(" ++ integer_to_list(CritThreshold) ++ ") thresholds";
-    {"max",ok} -> "is less than warning(" ++ integer_to_list(WarnThreshold) ++ ") and critical(" ++ integer_to_list(CritThreshold) ++ ") thresholds";
-    {"min",_} ->  "is less than or equal to" ++ " " ++ OrderMode ++ " " ++ atom_to_list(ThresholdType) ++ " threshold of " ++ integer_to_list(ThresholdViolated);
-    {"max",_} ->  "is greater than or equal to" ++ " " ++ OrderMode ++ " " ++ atom_to_list(ThresholdType) ++ " threshold of " ++ integer_to_list(ThresholdViolated)
+    {"min",ok} -> "is greater than or equal to warning(" ++ integer_to_list(WarnThreshold) ++ ") and critical(" ++ integer_to_list(CritThreshold) ++ ") thresholds";
+    {"max",ok} -> "is less than or equal to warning(" ++ integer_to_list(WarnThreshold) ++ ") and critical(" ++ integer_to_list(CritThreshold) ++ ") thresholds";
+    {"min",_} ->  "is less than " ++ OrderMode ++ " " ++ atom_to_list(ThresholdType) ++ " threshold of " ++ integer_to_list(ThresholdViolated);
+    {"max",_} ->  "is greater than " ++ OrderMode ++ " " ++ atom_to_list(ThresholdType) ++ " threshold of " ++ integer_to_list(ThresholdViolated)
   end,
   {TargetState, CheckCount} = lists:keyfind(TargetState, 1, Counts),
   {total, TotalCount} = lists:keyfind(total, 1, Counts),
