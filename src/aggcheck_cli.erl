@@ -5,10 +5,8 @@ main([]) ->
     getopt:usage(option_spec_list(), escript:script_name());
 main(Args) ->
     OptSpecList = option_spec_list(),
-    %io:format("For command line: ~p~n"
-    %          "getopt:parse/2 returns:~n~n", [Args]),
     case getopt:parse(OptSpecList, Args) of
-        {ok, {Options, NonOptArgs}} ->
+        {ok, {Options, _NonOptArgs}} ->
             run_check(Options);
         {error, {Reason, Data}} ->
             io:format("Error: ~s ~p~n~n", [Reason, Data]),
@@ -16,8 +14,7 @@ main(Args) ->
     end.
 
 setting(Param, Settings) ->
-  %io:format("Settings: ~p", [Settings]),
-  {_Param, Value} = lists:keyfind(Param, 1, Settings),
+  {Param, Value} = lists:keyfind(Param, 1, Settings),
   Value.
 
 run_check(Options) ->
@@ -48,7 +45,9 @@ run_check(Options) ->
    StdOut4 = lists:foldl(fun({Key,Value},Output) -> nagios:add_perfdata(atom_to_list(Key), integer_to_list(Value), Output) end, StdOut3, Counts),
 
    % add extended output to show each check result by hostname and status
-   StdOut5 = lists:foldl(fun([{host,Hostname},{check,Check},{check_hard_state,State}], Output) -> Message = binary_to_list(Hostname) ++ ": " ++ binary_to_list(Check) ++ "=" ++ atom_to_list(nagios:code_to_status(trunc(State))), nagios:add_output(Message, Output) end, StdOut4, aggcheck:getHostNames(Result)),
+   StdOut5 = lists:foldl(fun([{host,Hostname},{check,Check},{check_hard_state,State}], Output) ->
+                             Message = binary_to_list(Hostname) ++ ": " ++ binary_to_list(Check) ++ "=" ++ atom_to_list(nagios:code_to_status(trunc(State))), nagios:add_output(Message, Output) end,
+                             StdOut4, aggcheck:getHostNames(Result)),
    io:format("~s\n", [nagios:render(StdOut5)]),
    nagios:halt_with(CheckState).
 
