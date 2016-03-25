@@ -1,5 +1,5 @@
 NAME=aggregated_check
-VERSION=0.0.1
+VERSION=0.0.2
 
 .PHONY: package
 package:
