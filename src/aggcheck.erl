@@ -49,6 +49,7 @@ query_icinga(Options) ->
   Result = case Response of
     {ok, {{Version, 200, ReasonPhrase}, Headers, Body}}   -> ok;
     {ok, {{"HTTP/1.1",404,"Not Found"}, _      , _   }}   -> Body = [], Headers = [], ok; %, io:format("404, no results found")
+    {ok, {{_Version,401,"Unauthorized"}, Headers, Body}} -> {error, "HTTP 401 Unauthorized"};
     {error, Reason}                                       -> Body = [], {error, Reason}
     end,
   [{<<"results">>,ExtractedResults}] = jsx:decode(binary:list_to_bin(Body)),
